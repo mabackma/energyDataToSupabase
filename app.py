@@ -23,7 +23,6 @@ def insert_row(row, phase_type):
         'ts': row['ts'],
         'price_realtime': row['price']
     }
-    print(data)
     # Insert data into Supabase table
     supabase.table('phase').insert(data).execute()
 
@@ -48,12 +47,10 @@ df_all = df_all.with_columns(pl.col("ts").dt.strftime('%Y-%m-%d %H:%M:%S').alias
 # Fill nan values with 0
 df_all = df_all.fill_null(0)
 
-df_all = df_all.to_pandas()
 df_all = df_all.head()
 
 # Iterate over each row in the DataFrame and insert it into the Supabase table
-for index, row in df_all.iterrows():
-    print(row['meter_id'])
+for row in df_all.iter_rows(named=True):
     # Insert data for each phase type (L1, L2, L3)
     for phase_type in range(1, 4):
         insert_row(row, phase_type)
@@ -73,6 +70,5 @@ for index, row in df_all.iterrows():
         'ts': row['ts'],
         'price_realtime': row['price']
     }
-    print(data_total)
     # Insert total data into Supabase table
     supabase.table('phase').insert(data_total).execute()
