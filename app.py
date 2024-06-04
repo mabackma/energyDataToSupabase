@@ -80,9 +80,6 @@ df_all = df_all.drop("L3 total active returned energy_right")
 # Convert timestamp column to string format
 df_all = df_all.with_columns(pl.col("ts").dt.strftime('%Y-%m-%d %H:%M:%S').alias("ts"))
 
-# Fill nan values with 0
-df_all = df_all.fill_null(0)
-
 # Remove the head() call to process the entire DataFrame
 df_all = df_all.head(100000)
 print("start")
