@@ -147,25 +147,7 @@ new_columns = {
 # Add all new columns to the dataframe and initialize them with None values
 for col_name, col_type in new_columns.items():
     df_all = df_all.with_columns(pl.lit(None).cast(col_type).alias(col_name))
-'''''
-# Initialize an empty list for updated rows
-updated_rows = []
 
-# Iterate over each row in the DataFrame
-for row in df_all.iter_rows(named=True):
-
-    # Update the row for each phase type (1, 2, 3)
-    for phase_type in range(1, 4):
-        updated_row = update_row(dict(row), phase_type)
-        updated_rows.append(updated_row)
-
-    # Update the row for the total values
-    updated_total_row = update_total_row(dict(row))
-    updated_rows.append(updated_total_row)
-
-# Replace the dataframe with a new dataframe containing the updated rows
-df_all = pl.DataFrame(updated_rows)
-'''''
 # Extract column names and data types from df_all
 column_types = {col: df_all[col].dtype for col in df_all.columns}
 
@@ -181,6 +163,7 @@ updated_rows = []
 futures = []
 with ThreadPoolExecutor(max_workers=16) as executor:  # Set to 16 for Ryzen 5800X
     for row in df_all.iter_rows(named=True):
+
         # Update the row for each phase type (1, 2, 3)
         for phase_type in range(1, 4):
             updated_row = update_row(dict(row), phase_type)
@@ -212,7 +195,7 @@ columns_to_remove = ['L1 current', 'L1 voltage', 'L1 active power', 'L1 Power fa
                      'L3 total active energy', 'L3 total active returned energy', 'L3 apparent power',
                      'meter_id', 'ts_orig', 'price', 'Total current', 'Total active power',
                      'Total active energy', 'Total active returned energy', 'Total apparent power']
-#df_all = df_all.drop(columns_to_remove)
+
 df_updated = df_updated.drop(columns_to_remove)
 
 # Write files from the dataframe
@@ -222,7 +205,4 @@ df_updated.write_parquet(path_parquet)
 path_csv = dirpath / "supabase_data.csv"
 df_updated.write_csv(path_csv, separator=";")
 
-print("start")
-# Process and upload data
-#process_and_upload(df_all, batch_size=1000)
-print("end")
+print("the files were successfully created")
