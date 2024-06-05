@@ -93,17 +93,24 @@ def insert_batch(batch_data):
     supabase.table('phase').insert(batch_data).execute()
 
 
+# Funtion to upload data in batches
 def process_and_upload(df_new, batch_size=1000):
     batch_data = []
     futures = []
     with ThreadPoolExecutor(max_workers=16) as executor:  # Set to 16 for Ryzen 5800X
         for row in df_new.iter_rows(named=True):
             batch_data.append(row)
+
+            # If batch_data has reached the batch_size, submit it as a task
             if len(batch_data) >= batch_size:
                 futures.append(executor.submit(insert_batch, batch_data.copy()))
                 batch_data = []
+
+        # If there is any remaining data in batch_data, submit it as the final batch
         if batch_data:
             futures.append(executor.submit(insert_batch, batch_data.copy()))
+
+        # Process the results from the batch submissions
         for future in as_completed(futures):
             future.result()  # This will raise an exception if the upload failed
 
@@ -162,9 +169,9 @@ df_all = df_all.drop("L3 total active returned energy_right")
 df_all = df_all.with_columns(pl.col("ts_orig").dt.strftime('%Y-%m-%d %H:%M:%S').alias("ts_orig"))
 
 # Remove the head() call to process the entire DataFrame
-df_all = df_all.head(100000)
+df_all = df_all.head(1000)
 
-# Add new columns to the DataFrame
+# Define new columns and their data types
 new_columns = {
     'current': pl.Float64,
     'voltage': pl.Float64,
@@ -180,19 +187,29 @@ new_columns = {
     'price_realtime': pl.Float64
 }
 
+# Add all new columns to the dataframe and initialize them with None values
 for col_name, col_type in new_columns.items():
     df_all = df_all.with_columns(pl.lit(None).cast(col_type).alias(col_name))
 
+# Initialize an empty list for updated rows
 updated_rows = []
+
+# Iterate over each row in the DataFrame
 for row in df_all.iter_rows(named=True):
+
+    # Update the row for each phase type (1, 2, 3)
     for phase_type in range(1, 4):
         updated_row = update_row(dict(row), phase_type)
         updated_rows.append(updated_row)
+
+    # Update the row for the total values
     updated_total_row = update_total_row(dict(row))
     updated_rows.append(updated_total_row)
 
+# Replace the dataframe with a new dataframe containing the updated rows
 df_all = pl.DataFrame(updated_rows)
 
+# Remove unnecessary columns
 columns_to_remove = ['L1 current', 'L1 voltage', 'L1 active power', 'L1 Power factor', 'L1 frequency',
                      'L1 total active energy', 'L1 total active returned energy', 'L1 apparent power',
                      'L2 current', 'L2 voltage', 'L2 active power', 'L2 Power factor', 'L2 frequency',
