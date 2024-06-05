@@ -88,12 +88,13 @@ process_and_upload(df_all, batch_size=1000)
 print("end")
 '''''
 
+
 # Define a function to insert rows into Supabase table
 def insert_batch(batch_data):
     supabase.table('phase').insert(batch_data).execute()
 
 
-# Funtion to upload data in batches
+# Function to upload data in batches
 def process_and_upload(df_new, batch_size=1000):
     batch_data = []
     futures = []
@@ -135,10 +136,10 @@ def update_row(row, phase_type):
 # Function to update row for total data
 def update_total_row(row):
     row['current'] = row['Total current']
-    row['voltage'] = 0  # Assuming 0 instead of None for batch insert consistency
+    row['voltage'] = None
     row['act_power'] = row['Total active power']
-    row['pf'] = 0  # Assuming 0 instead of None for batch insert consistency
-    row['freq'] = 0  # Assuming 0 instead of None for batch insert consistency
+    row['pf'] = None
+    row['freq'] = None
     row['total_act_energy'] = row['Total active energy']
     row['total_act_ret_energy'] = row['Total active returned energy']
     row['aprt_power'] = row['Total apparent power']
