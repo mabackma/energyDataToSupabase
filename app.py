@@ -170,7 +170,7 @@ df_all = df_all.drop("L3 total active returned energy_right")
 df_all = df_all.with_columns(pl.col("ts_orig").dt.strftime('%Y-%m-%d %H:%M:%S').alias("ts_orig"))
 
 # Remove the head() call to process the entire DataFrame
-df_all = df_all.head(1000)
+#df_all = df_all.head(1000)
 
 # Define new columns and their data types
 new_columns = {
