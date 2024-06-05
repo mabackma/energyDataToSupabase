@@ -6,7 +6,7 @@ from dotenv import load_dotenv
 from supabase import create_client
 from dictionaries import device_numbers
 from concurrent.futures import ThreadPoolExecutor, as_completed
-
+from pathlib import Path
 '''''
 # Define a function to insert rows into Supabase table
 def insert_batch(batch_data):
@@ -221,7 +221,14 @@ columns_to_remove = ['L1 current', 'L1 voltage', 'L1 active power', 'L1 Power fa
                      'Total active energy', 'Total active returned energy', 'Total apparent power']
 df_all = df_all.drop(columns_to_remove)
 
+# Write files from the dataframe
+dirpath = Path(".")
+path_parquet = dirpath / "supabase_data.parquet"
+df_all.write_parquet(path_parquet)
+path_csv = dirpath / "supabase_data.csv"
+df_all.write_csv(path_csv, separator=";")
+
 print("start")
 # Process and upload data
-process_and_upload(df_all, batch_size=1000)
+#process_and_upload(df_all, batch_size=1000)
 print("end")
