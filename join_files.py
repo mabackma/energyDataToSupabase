@@ -1,5 +1,4 @@
 import shutil
-import glob
 import polars as pl
 import os
 
@@ -42,13 +41,3 @@ def check_file_lengths(files):
         df = pl.read_csv(file)
         print(len(df))
 
-
-all_files = glob.glob("./csv_files/*.csv")
-sorted_files = sort_files_in_list(all_files)
-check_file_lengths(sorted_files)
-join_csv_files(sorted_files)
-
-df = pl.read_csv("data_files/supabase_data.csv", separator=";")
-print(df.head())
-print(f'Length: {df.shape[0]}')
-df.write_parquet("./data_files/supabase_data_parquet.parquet")

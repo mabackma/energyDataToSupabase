@@ -2,7 +2,6 @@ import os
 import polars as pl
 from dictionaries import device_numbers
 from pathlib import Path
-import math
 
 
 # Function to update L1, L2, L3 rows
@@ -75,47 +74,6 @@ def write_csv_file(df, name):
     path_csv = dirpath / f"supabase_data{name}.csv"
     df.write_csv(path_csv, separator=";")
 
-
-df_all = pl.read_parquet("all_data_with_price.parquet")
-
-# Modify columns
-df_all = df_all.with_columns(pl.col("ts").alias("ts_orig"))
-df_all = df_all.drop('ts')
-df_all = df_all.with_columns(pl.col("L3 total active returned energy").alias("L2 total active returned energy"))
-df_all = df_all.with_columns(pl.col("L3 total active returned energy_right").alias("L3 total active returned energy"))
-df_all = df_all.drop("L3 total active returned energy_right")
-
-# Convert timestamp column to string format
-df_all = df_all.with_columns(pl.col("ts_orig").dt.strftime('%Y-%m-%d %H:%M:%S').alias("ts_orig"))
-
-# Define new columns and their data types
-new_columns = {
-    'current': pl.Float32,
-    'voltage': pl.Float32,
-    'act_power': pl.Float32,
-    'pf': pl.Float32,
-    'freq': pl.Float32,
-    'total_act_energy': pl.Float32,
-    'total_act_ret_energy': pl.Float32,
-    'aprt_power': pl.Float32,
-    'device': pl.Int32,
-    'phase_type': pl.Int32,
-    'ts': pl.Utf8,
-    'price_realtime': pl.Float32
-}
-
-# Add all new columns to the dataframe and initialize them with None values
-for col_name, col_type in new_columns.items():
-    df_all = df_all.with_columns(pl.lit(None).cast(col_type).alias(col_name))
-
-amount_of_files = math.ceil(len(df_all) / 1000000)
-
-for i in range(amount_of_files):
-    print(f"writing file #{i + 1}")
-    start_idx = i * 1000000
-    end_idx = min((i + 1) * 1000000, len(df_all))
-    df_slice = df_all.slice(start_idx, end_idx - start_idx)
-    write_csv_file(df_slice, i + 1)
 
 
 
