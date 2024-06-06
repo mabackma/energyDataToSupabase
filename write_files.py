@@ -2,7 +2,6 @@ import os
 import polars as pl
 from dictionaries import device_numbers
 from pathlib import Path
-import shutil
 import math
 
 
@@ -76,17 +75,6 @@ def write_csv_file(df, name):
     path_csv = dirpath / f"supabase_data{name}.csv"
     df.write_csv(path_csv, separator=";")
 
-def join_csv_files(all_files):
-    with open('joined_files.csv', 'wb') as outfile:
-        for i, fname in enumerate(all_files):
-            with open(fname, 'rb') as infile:
-                print(f"index is {i}")
-                if i != 0:
-                    infile.readline()  # Throw away header on all but first file
-                # Block copy rest of file from input to output without parsing
-                shutil.copyfileobj(infile, outfile)
-                print(fname + " has been imported.")
-
 
 df_all = pl.read_parquet("all_data_with_price.parquet")
 
@@ -120,13 +108,13 @@ new_columns = {
 for col_name, col_type in new_columns.items():
     df_all = df_all.with_columns(pl.lit(None).cast(col_type).alias(col_name))
 
-amount_of_files = math.ceil(len(df_all) / 500000)
+amount_of_files = math.ceil(len(df_all) / 1000000)
 
 for i in range(amount_of_files):
     print(f"writing file #{i + 1}")
-    start_idx = i * 500000
-    end_idx = start_idx + 500000
-    df_slice = df_all.slice(start_idx, end_idx)
+    start_idx = i * 1000000
+    end_idx = min((i + 1) * 1000000, len(df_all))
+    df_slice = df_all.slice(start_idx, end_idx - start_idx)
     write_csv_file(df_slice, i + 1)
 
 
