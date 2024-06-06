@@ -1,44 +1,14 @@
 import os
 import polars as pl
-import pandas as pd
-import numpy as np
-from dotenv import load_dotenv
-from supabase import create_client
-from dictionaries import device_numbers, sb_columns
-from concurrent.futures import ThreadPoolExecutor, as_completed
+from dictionaries import device_numbers
 from pathlib import Path
+import shutil
+import math
 
 
-# Define a function to insert rows into Supabase table
-def insert_batch(batch_data):
-    supabase.table('phase').insert(batch_data).execute()
-
-
-# Function to upload data in batches
-def process_and_upload(df_new, batch_size=1000):
-    batch_data = []
-    futures = []
-    with ThreadPoolExecutor(max_workers=16) as executor:  # Set to 16 for Ryzen 5800X
-        for row in df_new.iter_rows(named=True):
-            batch_data.append(row)
-
-            # If batch_data has reached the batch_size, submit it as a task
-            if len(batch_data) >= batch_size:
-                futures.append(executor.submit(insert_batch, batch_data.copy()))
-                batch_data = []
-
-        # If there is any remaining data in batch_data, submit it as the final batch
-        if batch_data:
-            futures.append(executor.submit(insert_batch, batch_data.copy()))
-
-        # Process the results from the batch submissions
-        for future in as_completed(futures):
-            future.result()  # This will raise an exception if the upload failed
-
-'''''
 # Function to update L1, L2, L3 rows
 def update_row(row, phase_type):
-    row['current'] = row[f'L{phase_type} current'].cast(pl.Float32) if row[f'L{phase_type} current'] is not None else None
+    row['current'] = row[f'L{phase_type} current']
     row['voltage'] = row[f'L{phase_type} voltage']
     row['act_power'] = row[f'L{phase_type} active power']
     row['pf'] = row[f'L{phase_type} Power factor']
@@ -51,24 +21,8 @@ def update_row(row, phase_type):
     row['ts'] = row['ts_orig']
     row['price_realtime'] = row['price']
     return row
-'''''
-# Function to update L1, L2, L3 rows
-def update_row(row, phase_type):
-    for col_name in ['current', 'voltage', 'active power', 'Power factor', 'frequency', 'total active energy',
-                     'total active returned energy', 'apparent power']:
-        key = f'L{phase_type} {col_name}'
-        value = row[key]
-        if value is not None:
-            row[sb_columns[col_name]] = np.float32(value)  # Convert to float
-        else:
-            row[sb_columns[col_name]] = None
-    row['device'] = device_numbers[row['meter_id']]
-    row['phase_type'] = phase_type
-    row['ts'] = row['ts_orig']
-    row['price_realtime'] = np.float32(row['price'])
-    return row
 
-'''''
+
 # Function to update row for total data
 def update_total_row(row):
     row['current'] = row['Total current']
@@ -84,34 +38,55 @@ def update_total_row(row):
     row['ts'] = row['ts_orig']
     row['price_realtime'] = row['price']
     return row
-'''''
 
 
-# Function to update row for total data
-def update_total_row(row):
-    for col_name in ['Total current', 'Total active power', 'Total active energy',
-                     'Total active returned energy', 'Total apparent power']:
-        key = f'{col_name}'
-        value = row[key]
-        if value is not None:
-            row[sb_columns[col_name]] = np.float32(value)  # Convert to float
-        else:
-            row[sb_columns[col_name]] = None
-    row['voltage'] = None
-    row['pf'] = None
-    row['freq'] = None
-    row['device'] = device_numbers[row['meter_id']]
-    row['phase_type'] = 4  # Total phase type
-    row['ts'] = row['ts_orig']
-    row['price_realtime'] = np.float32(row['price'])
-    return row
+def write_csv_file(df, name):
+    # Initialize an empty list for updated rows
+    updated_rows = []
 
-load_dotenv()
-url = os.getenv('SUPABASE_URL')
-api_key = os.getenv('SUPABASE_API_KEY')
+    # Iterate over each row in the DataFrame
+    for row in df.iter_rows(named=True):
 
-# Initialize Supabase client
-supabase = create_client(url, api_key)
+        # Update the row for each phase type (1, 2, 3)
+        for phase_type in range(1, 4):
+            updated_row = update_row(dict(row), phase_type)
+            updated_rows.append(updated_row)
+
+        # Update the row for the total values
+        updated_total_row = update_total_row(dict(row))
+        updated_rows.append(updated_total_row)
+
+    # Replace the dataframe with a new dataframe containing the updated rows
+    df = pl.DataFrame(updated_rows, infer_schema_length=1000)
+
+    # Remove unnecessary columns
+    columns_to_remove = ['L1 current', 'L1 voltage', 'L1 active power', 'L1 Power factor', 'L1 frequency',
+                         'L1 total active energy', 'L1 total active returned energy', 'L1 apparent power',
+                         'L2 current', 'L2 voltage', 'L2 active power', 'L2 Power factor', 'L2 frequency',
+                         'L2 total active energy', 'L2 total active returned energy', 'L2 apparent power',
+                         'L3 current', 'L3 voltage', 'L3 active power', 'L3 Power factor', 'L3 frequency',
+                         'L3 total active energy', 'L3 total active returned energy', 'L3 apparent power',
+                         'meter_id', 'ts_orig', 'price', 'Total current', 'Total active power',
+                         'Total active energy', 'Total active returned energy', 'Total apparent power']
+    df = df.drop(columns_to_remove)
+
+    # Write CSV file from the dataframe
+    dirpath = Path("./csv_files")
+    os.makedirs(dirpath, exist_ok=True)
+    path_csv = dirpath / f"supabase_data{name}.csv"
+    df.write_csv(path_csv, separator=";")
+
+def join_csv_files(all_files):
+    with open('joined_files.csv', 'wb') as outfile:
+        for i, fname in enumerate(all_files):
+            with open(fname, 'rb') as infile:
+                print(f"index is {i}")
+                if i != 0:
+                    infile.readline()  # Throw away header on all but first file
+                # Block copy rest of file from input to output without parsing
+                shutil.copyfileobj(infile, outfile)
+                print(fname + " has been imported.")
+
 
 df_all = pl.read_parquet("all_data_with_price.parquet")
 
@@ -124,9 +99,6 @@ df_all = df_all.drop("L3 total active returned energy_right")
 
 # Convert timestamp column to string format
 df_all = df_all.with_columns(pl.col("ts_orig").dt.strftime('%Y-%m-%d %H:%M:%S').alias("ts_orig"))
-
-# Remove the head() call to process the entire DataFrame
-df_all = df_all.head(1000)
 
 # Define new columns and their data types
 new_columns = {
@@ -148,61 +120,14 @@ new_columns = {
 for col_name, col_type in new_columns.items():
     df_all = df_all.with_columns(pl.lit(None).cast(col_type).alias(col_name))
 
-# Extract column names and data types from df_all
-column_types = {col: df_all[col].dtype for col in df_all.columns}
+amount_of_files = math.ceil(len(df_all) / 500000)
 
-# Create an empty DataFrame with the same column names and data types as df_all
-df_updated = pl.DataFrame({col: pl.Series([], dtype=column_types[col]) for col in df_all.columns})
-def insert_rows(df, updated_rows):
-    df_new = pl.DataFrame(updated_rows)
-    print('---')
-    df.vstack(df_new)
+for i in range(amount_of_files):
+    print(f"writing file #{i + 1}")
+    start_idx = i * 500000
+    end_idx = start_idx + 500000
+    df_slice = df_all.slice(start_idx, end_idx)
+    write_csv_file(df_slice, i + 1)
 
-batch_size = 1000
-updated_rows = []
-futures = []
-with ThreadPoolExecutor(max_workers=16) as executor:  # Set to 16 for Ryzen 5800X
-    for row in df_all.iter_rows(named=True):
 
-        # Update the row for each phase type (1, 2, 3)
-        for phase_type in range(1, 4):
-            updated_row = update_row(dict(row), phase_type)
-            updated_rows.append(updated_row)
 
-        # Update the row for the total values
-        updated_total_row = update_total_row(dict(row))
-        updated_rows.append(updated_total_row)
-
-        # If batch_data has reached the batch_size, submit it as a task
-        if len(updated_rows) >= batch_size:
-            futures.append(executor.submit(insert_rows, df_updated, updated_rows.copy()))
-            updated_rows = []
-
-    # If there is any remaining data in batch_data, submit it as the final batch
-    if updated_rows:
-        futures.append(executor.submit(insert_rows, df_updated, updated_rows.copy()))
-
-    # Process the results from the batch submissions
-    for future in as_completed(futures):
-        future.result()  # This will raise an exception if the upload failed
-
-# Remove unnecessary columns
-columns_to_remove = ['L1 current', 'L1 voltage', 'L1 active power', 'L1 Power factor', 'L1 frequency',
-                     'L1 total active energy', 'L1 total active returned energy', 'L1 apparent power',
-                     'L2 current', 'L2 voltage', 'L2 active power', 'L2 Power factor', 'L2 frequency',
-                     'L2 total active energy', 'L2 total active returned energy', 'L2 apparent power',
-                     'L3 current', 'L3 voltage', 'L3 active power', 'L3 Power factor', 'L3 frequency',
-                     'L3 total active energy', 'L3 total active returned energy', 'L3 apparent power',
-                     'meter_id', 'ts_orig', 'price', 'Total current', 'Total active power',
-                     'Total active energy', 'Total active returned energy', 'Total apparent power']
-
-df_updated = df_updated.drop(columns_to_remove)
-
-# Write files from the dataframe
-dirpath = Path(".")
-path_parquet = dirpath / "supabase_data.parquet"
-df_updated.write_parquet(path_parquet)
-path_csv = dirpath / "supabase_data.csv"
-df_updated.write_csv(path_csv, separator=";")
-
-print("the files were successfully created")
