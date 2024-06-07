@@ -11,7 +11,7 @@ import math
 import glob
 from join_files import sort_files_in_list, check_file_lengths, join_csv_files
 from write_files import write_csv_file
-
+import time
 '''''
 # Define a function to insert rows into Supabase table
 def insert_batch(batch_data):
@@ -96,7 +96,21 @@ print("end")
 
 # Define a function to insert rows into Supabase table
 def insert_batch(batch_data):
-    supabase.table('phase').insert(batch_data).execute()
+    max_retries = 5
+    delay = 3
+    attempt = 0
+    while attempt < max_retries:
+        try:
+            supabase.table('phase').insert(batch_data).execute()
+            return  # Success, exit the function
+        except Exception as e:
+            print(f"Error inserting batch (attempt {attempt + 1}): {e}")
+            attempt += 1
+            if attempt < max_retries:
+                print(f"Retrying in {delay} seconds...")
+                time.sleep(delay)
+            else:
+                raise  # Raise the exception if all retries fail
 
 
 # Function to upload data in batches
@@ -127,7 +141,7 @@ api_key = os.getenv('SUPABASE_API_KEY')
 
 # Initialize Supabase client
 supabase = create_client(url, api_key)
-
+'''''
 df_all = pl.read_parquet("all_data_with_price.parquet")
 
 # Modify columns
@@ -174,16 +188,17 @@ all_files = glob.glob("./csv_files/*.csv")
 sorted_files = sort_files_in_list(all_files)
 check_file_lengths(sorted_files)
 join_csv_files(sorted_files)
-
+'''''
 # Create a dataframe from the final CSV
 df = pl.read_csv("data_files/supabase_data.csv", separator=";")
 print(df.head())
 print(f'Length: {df.shape[0]}')
 
 # Create a parquet file
-df.write_parquet("./data_files/supabase_data_parquet.parquet")
+#df.write_parquet("./data_files/supabase_data_parquet.parquet")
 
 # Upload the data to Supabase
+df = df.head(20000000)
 print("start")
-#process_and_upload(df, batch_size=1000)
+process_and_upload(df, batch_size=1000)
 print("end")
