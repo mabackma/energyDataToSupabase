@@ -11,7 +11,7 @@ api_key = os.getenv('SUPABASE_API_KEY')
 supabase = create_client(url, api_key)
 
 # TODO Delete data before 2024-5-12
-cutoff_date = datetime.datetime(2024, 3, 26)
+cutoff_date = datetime.datetime(2024, 5, 13)
 cutoff_date_str = str(cutoff_date)
 table_name = 'phase'
 timestamp_field = 'ts'

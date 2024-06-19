@@ -13,6 +13,68 @@ from join_files import sort_files_in_list, check_file_lengths, join_csv_files
 from write_files import write_csv_file
 import time
 from datetime import datetime
+
+
+# Define a function to insert rows into Supabase table
+def insert_batch(batch_data):
+    max_retries = 5
+    delay = 3
+    attempt = 0
+    while attempt < max_retries:
+        try:
+            supabase.table('phase').insert(batch_data).execute()
+            print(f"SUCCESS ON ATTEMPT {attempt}")
+            return  # Success, exit the function
+        except Exception as e:
+            print(f"Error inserting batch (attempt {attempt + 1}): {e}")
+            attempt += 1
+            if attempt < max_retries:
+                print(f"Retrying in {delay} seconds...")
+                time.sleep(delay)
+            else:
+                raise  # Raise the exception if all retries fail
+
+
+# Function to upload data in batches
+def process_and_upload(df_new, batch_size=1000):
+    batch_data = []
+    futures = []
+    with ThreadPoolExecutor(max_workers=16) as executor:  # Set to 16 for Ryzen 5800X
+        for row in df_new.iter_rows(named=True):
+            batch_data.append(row)
+
+            # If batch_data has reached the batch_size, submit it as a task
+            if len(batch_data) >= batch_size:
+                futures.append(executor.submit(insert_batch, batch_data.copy()))
+                batch_data = []
+
+        # If there is any remaining data in batch_data, submit it as the final batch
+        if batch_data:
+            futures.append(executor.submit(insert_batch, batch_data.copy()))
+
+        # Process the results from the batch submissions
+        for future in as_completed(futures):
+            future.result()  # This will raise an exception if the upload failed
+
+
+load_dotenv()
+url = os.getenv('SUPABASE_URL')
+api_key = os.getenv('SUPABASE_API_KEY')
+
+# Initialize Supabase client
+supabase = create_client(url, api_key)
+
+# Create a dataframe from the final CSV
+df = pl.read_csv("data_files/supabase_data.csv", separator=";")
+print(df.tail())
+print(f'Length: {df.shape[0]}')
+
+# Upload the data to Supabase
+print("start")
+process_and_upload(df, batch_size=1000)
+print("end")
+
+
 '''''
 # Define a function to insert rows into Supabase table
 def insert_batch(batch_data):
@@ -95,54 +157,6 @@ print("end")
 '''''
 
 
-# Define a function to insert rows into Supabase table
-def insert_batch(batch_data):
-    max_retries = 5
-    delay = 3
-    attempt = 0
-    while attempt < max_retries:
-        try:
-            supabase.table('phase').insert(batch_data).execute()
-            print(f"SUCCESS ON ATTEMPT {attempt}")
-            return  # Success, exit the function
-        except Exception as e:
-            print(f"Error inserting batch (attempt {attempt + 1}): {e}")
-            attempt += 1
-            if attempt < max_retries:
-                print(f"Retrying in {delay} seconds...")
-                time.sleep(delay)
-            else:
-                raise  # Raise the exception if all retries fail
-
-
-# Function to upload data in batches
-def process_and_upload(df_new, batch_size=1000):
-    batch_data = []
-    futures = []
-    with ThreadPoolExecutor(max_workers=16) as executor:  # Set to 16 for Ryzen 5800X
-        for row in df_new.iter_rows(named=True):
-            batch_data.append(row)
-
-            # If batch_data has reached the batch_size, submit it as a task
-            if len(batch_data) >= batch_size:
-                futures.append(executor.submit(insert_batch, batch_data.copy()))
-                batch_data = []
-
-        # If there is any remaining data in batch_data, submit it as the final batch
-        if batch_data:
-            futures.append(executor.submit(insert_batch, batch_data.copy()))
-
-        # Process the results from the batch submissions
-        for future in as_completed(futures):
-            future.result()  # This will raise an exception if the upload failed
-
-
-load_dotenv()
-url = os.getenv('SUPABASE_URL')
-api_key = os.getenv('SUPABASE_API_KEY')
-
-# Initialize Supabase client
-supabase = create_client(url, api_key)
 '''''
 df_all = pl.read_parquet("all_data_with_price.parquet")
 
@@ -191,12 +205,3 @@ sorted_files = sort_files_in_list(all_files)
 check_file_lengths(sorted_files)
 join_csv_files(sorted_files)
 '''''
-# Create a dataframe from the final CSV
-df = pl.read_csv("data_files/supabase_data.csv", separator=";")
-print(df.tail())
-print(f'Length: {df.shape[0]}')
-
-# Upload the data to Supabase
-print("start")
-process_and_upload(df, batch_size=1000)
-print("end")
