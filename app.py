@@ -12,6 +12,7 @@ import glob
 from join_files import sort_files_in_list, check_file_lengths, join_csv_files
 from write_files import write_csv_file
 import time
+from datetime import datetime
 '''''
 # Define a function to insert rows into Supabase table
 def insert_batch(batch_data):
@@ -102,6 +103,7 @@ def insert_batch(batch_data):
     while attempt < max_retries:
         try:
             supabase.table('phase').insert(batch_data).execute()
+            print(f"SUCCESS ON ATTEMPT {attempt}")
             return  # Success, exit the function
         except Exception as e:
             print(f"Error inserting batch (attempt {attempt + 1}): {e}")
@@ -191,14 +193,10 @@ join_csv_files(sorted_files)
 '''''
 # Create a dataframe from the final CSV
 df = pl.read_csv("data_files/supabase_data.csv", separator=";")
-print(df.head())
+print(df.tail())
 print(f'Length: {df.shape[0]}')
 
-# Create a parquet file
-#df.write_parquet("./data_files/supabase_data_parquet.parquet")
-
 # Upload the data to Supabase
-df = df.head(20000000)
 print("start")
 process_and_upload(df, batch_size=1000)
 print("end")

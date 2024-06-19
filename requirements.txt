@@ -3,3 +3,5 @@ supabase
 pandas
 polars
 pyarrow
+postgrest-py
+connectorx
