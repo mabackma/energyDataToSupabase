@@ -70,7 +70,7 @@ print(df.tail())
 print(f'Length: {df.shape[0]}')
 
 # Upload the data to Supabase
-df = df.head(1000000)
+#df = df.head(1000000)
 print("start")
 process_and_upload(df, batch_size=1000)
 print("end")
